@@ -582,16 +582,18 @@
         const stars = new THREE.Points(starsGeo, new THREE.PointsMaterial({ size: 0.5, transparent: true, opacity: 0.8 }));
         scene.add(stars);
 
-        // ===== Boost 粒子特效 =====
-        const boostParticleCount = 1500;
+        // ===== Boost 粒子特效（两侧） =====
+        const boostParticleCount = 800;
         const boostGeo = new THREE.BufferGeometry();
         const boostPos = new Float32Array(boostParticleCount * 3);
         const boostCol = new Float32Array(boostParticleCount * 3);
-        const boostBasePos = new Float32Array(boostParticleCount * 3); // 存储初始位置用于动画
+        const boostBasePos = new Float32Array(boostParticleCount * 3);
         for (let i = 0; i < boostParticleCount; i++) {
-            const x = (Math.random() - 0.5) * 14;
-            const y = -3 + Math.random() * 8;
-            const z = 2 + Math.random() * 18;
+            // 粒子集中在两侧，中间留空
+            const side = Math.random() < 0.5 ? -1 : 1;
+            const x = side * (3.5 + Math.random() * 8);
+            const y = -2 + Math.random() * 7;
+            const z = 3 + Math.random() * 14;
             boostPos[i*3] = x;
             boostPos[i*3+1] = y;
             boostPos[i*3+2] = z;
@@ -606,7 +608,7 @@
         boostGeo.setAttribute('position', new THREE.BufferAttribute(boostPos, 3));
         boostGeo.setAttribute('color', new THREE.BufferAttribute(boostCol, 3));
         const boostMat = new THREE.PointsMaterial({
-            size: 0.25, vertexColors: true,
+            size: 0.18, vertexColors: true,
             transparent: true, opacity: 0,
             blending: THREE.AdditiveBlending,
             depthWrite: false,
@@ -1734,8 +1736,8 @@
             }
 
             // Boost 粒子翻涌特效
-            const boostOpacityTarget = isBoosting ? 1.0 : 0;
-            boostMat.opacity += (boostOpacityTarget - boostMat.opacity) * Math.min(dt * 3, 1);
+            const boostOpacityTarget = isBoosting ? 0.5 : 0;
+            boostMat.opacity += (boostOpacityTarget - boostMat.opacity) * Math.min(dt * 2.5, 1);
             if (boostMat.opacity > 0.005) {
                 boostParticles.visible = true;
                 const t = now * 0.001;
@@ -1744,19 +1746,16 @@
                     const ix = i * 3;
                     const bx = boostBasePos[ix];
                     const by = boostBasePos[ix + 1];
-                    // 翻涌：正弦波偏移 + 涡旋
-                    const waveX = Math.sin(t * 2.5 + bx * 0.6 + by * 0.3) * 1.2;
-                    const waveY = Math.cos(t * 2.0 + bx * 0.4 + by * 0.5) * 0.8;
-                    const waveZ = Math.sin(t * 1.8 + bx * 0.5) * 1.0;
-                    const swirlX = -by * Math.sin(t * 0.7) * 0.3;
-                    const swirlY = bx * Math.cos(t * 0.7) * 0.3;
-                    posArr[ix] = bx + waveX + swirlX;
-                    posArr[ix + 1] = by + waveY + swirlY;
+                    // 轻柔翻涌，幅度减小
+                    const waveX = Math.sin(t * 1.8 + bx * 0.3 + by * 0.2) * 0.5;
+                    const waveY = Math.cos(t * 1.5 + bx * 0.2 + by * 0.3) * 0.4;
+                    const waveZ = Math.sin(t * 1.2 + bx * 0.3) * 0.5;
+                    posArr[ix] = bx + waveX;
+                    posArr[ix + 1] = by + waveY;
                     posArr[ix + 2] = boostBasePos[ix + 2] + waveZ;
                 }
                 boostGeo.attributes.position.needsUpdate = true;
-                // 粒子大小随boost增强
-                boostMat.size = 0.15 + boostMat.opacity * 0.5;
+                boostMat.size = 0.1 + boostMat.opacity * 0.3;
             } else {
                 boostParticles.visible = false;
             }

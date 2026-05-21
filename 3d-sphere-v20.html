@@ -1515,6 +1515,7 @@
             e.preventDefault();
         }, { passive: false });
         document.addEventListener('touchend', (e) => {
+            if (gameState !== 'playing') return;
             e.preventDefault();
         }, { passive: false });
 

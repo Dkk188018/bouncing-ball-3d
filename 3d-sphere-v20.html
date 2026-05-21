@@ -112,6 +112,26 @@
             z-index: 20; overflow: hidden;
         }
         #levelSelect.hidden { display: none; }
+        /* ===== Boost 全屏炫彩叠加层 ===== */
+        #boostOverlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 5;
+            opacity: 0; transition: opacity 0.4s;
+            background:
+                radial-gradient(ellipse at 85% 50%, rgba(255,50,180,0.35) 0%, transparent 40%),
+                radial-gradient(ellipse at 15% 50%, rgba(50,200,255,0.35) 0%, transparent 40%),
+                radial-gradient(ellipse at 50% 20%, rgba(255,200,50,0.25) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 80%, rgba(180,50,255,0.25) 0%, transparent 50%);
+        }
+        #boostOverlay.active { opacity: 1; }
+        @keyframes boostPulse {
+            0% { filter: brightness(0.8) hue-rotate(0deg); }
+            25% { filter: brightness(1.3) hue-rotate(20deg); }
+            50% { filter: brightness(1.0) hue-rotate(40deg); }
+            75% { filter: brightness(1.4) hue-rotate(20deg); }
+            100% { filter: brightness(0.9) hue-rotate(0deg); }
+        }
+        #boostOverlay.active { animation: boostPulse 0.6s ease-in-out infinite; }
 
         /* 背景装饰光晕 */
         .bg-orb {
@@ -290,6 +310,8 @@
     </style>
 </head>
 <body>
+    <!-- Boost 全屏炫彩光晕 -->
+    <div id="boostOverlay"></div>
     <!-- 关卡选择 -->
     <div id="levelSelect">
         <div class="bg-orb orb1"></div>
@@ -582,25 +604,32 @@
         const stars = new THREE.Points(starsGeo, new THREE.PointsMaterial({ size: 0.5, transparent: true, opacity: 0.8 }));
         scene.add(stars);
 
-        // ===== Boost 粒子特效（星辰粒子，两侧绽放） =====
-        const boostParticleCount = 2500;
+        // ===== Boost 全屏炫彩粒子（两侧+上下+远近多层覆盖） =====
+        const boostParticleCount = 5000;
         const boostGeo = new THREE.BufferGeometry();
         const boostPos = new Float32Array(boostParticleCount * 3);
         const boostCol = new Float32Array(boostParticleCount * 3);
         const boostBasePos = new Float32Array(boostParticleCount * 3);
-        const boostPhase = new Float32Array(boostParticleCount); // 每颗粒子独立闪烁相位
+        const boostPhase = new Float32Array(boostParticleCount);
+        // 更丰富的炫彩色板
+        const BOOST_PALETTE = [
+            0xff3377, 0xff6633, 0xffaa00, 0xffee00,
+            0x33ff77, 0x00ffcc, 0x3399ff, 0x8833ff,
+            0xff33cc, 0xff5500, 0x00ddff, 0xcc33ff,
+            0xff8844, 0x44ffaa, 0xff44aa, 0x44aaff,
+        ];
         for (let i = 0; i < boostParticleCount; i++) {
             const side = Math.random() < 0.5 ? -1 : 1;
-            const x = side * (2.5 + Math.random() * 9);
-            const y = -1.5 + Math.random() * 8;
-            const z = 2 + Math.random() * 16;
+            const x = side * (1.8 + Math.random() * 14);
+            const y = -4 + Math.random() * 14;
+            const z = 0.5 + Math.random() * 22;
             boostPos[i*3] = x;
             boostPos[i*3+1] = y;
             boostPos[i*3+2] = z;
             boostBasePos[i*3] = x;
             boostBasePos[i*3+1] = y;
             boostBasePos[i*3+2] = z;
-            const c = COLORS[Math.floor(Math.random() * COLORS.length)];
+            const c = BOOST_PALETTE[Math.floor(Math.random() * BOOST_PALETTE.length)];
             boostCol[i*3] = ((c >> 16) & 0xff) / 255;
             boostCol[i*3+1] = ((c >> 8) & 0xff) / 255;
             boostCol[i*3+2] = (c & 0xff) / 255;
@@ -609,7 +638,7 @@
         boostGeo.setAttribute('position', new THREE.BufferAttribute(boostPos, 3));
         boostGeo.setAttribute('color', new THREE.BufferAttribute(boostCol, 3));
         const boostMat = new THREE.PointsMaterial({
-            size: 0.07, vertexColors: true,
+            size: 0.12, vertexColors: true,
             transparent: true, opacity: 0,
             blending: THREE.AdditiveBlending,
             depthWrite: false,
@@ -1736,11 +1765,13 @@
                 }
             }
 
-            // Boost 星辰粒子特效（颗颗独立闪烁）
+            // Boost 全屏炫彩粒子特效
             const boostOpacityTarget = isBoosting ? 1.0 : 0;
-            boostMat.opacity += (boostOpacityTarget - boostMat.opacity) * Math.min(dt * 4, 1);
+            const overlayEl = document.getElementById('boostOverlay');
+            boostMat.opacity += (boostOpacityTarget - boostMat.opacity) * Math.min(dt * 5, 1);
             if (boostMat.opacity > 0.005) {
                 boostParticles.visible = true;
+                if (overlayEl && !overlayEl.classList.contains('active')) overlayEl.classList.add('active');
                 const t = now * 0.001;
                 const posArr = boostGeo.attributes.position.array;
                 const colArr = boostGeo.attributes.color.array;
@@ -1748,25 +1779,29 @@
                     const ix = i * 3;
                     const bx = boostBasePos[ix];
                     const by = boostBasePos[ix + 1];
-                    // 每颗粒子独立闪烁：亮度在0.3~1.5之间波动
-                    const sparkle = 0.6 + 0.7 * Math.sin(t * 8.0 + boostPhase[i]);
-                    // 缓波
-                    const waveX = Math.sin(t * 1.5 + bx * 0.15 + boostPhase[i] * 0.3) * 0.5;
-                    const waveY = Math.cos(t * 1.3 + by * 0.12 + boostPhase[i] * 0.3) * 0.4;
-                    const waveZ = Math.sin(t * 1.2 + bx * 0.2) * 0.5;
+                    const bz = boostBasePos[ix + 2];
+                    // 每颗粒子独立剧烈闪烁：亮度0.2~2.0
+                    const sparkle = 0.4 + 0.8 * Math.sin(t * 10.0 + boostPhase[i])
+                                   + 0.4 * Math.sin(t * 17.0 + boostPhase[i] * 1.7);
+                    // 大幅波浪翻涌
+                    const waveX = Math.sin(t * 3.0 + bx * 0.2 + boostPhase[i] * 0.4) * 1.2
+                                + Math.cos(t * 2.5 + by * 0.3) * 0.8;
+                    const waveY = Math.cos(t * 2.8 + by * 0.15 + boostPhase[i] * 0.5) * 1.0
+                                + Math.sin(t * 3.5 + bz * 0.2) * 0.7;
+                    const waveZ = Math.sin(t * 2.2 + bz * 0.25 + boostPhase[i] * 0.3) * 0.8;
                     posArr[ix] = bx + waveX;
                     posArr[ix + 1] = by + waveY;
-                    posArr[ix + 2] = boostBasePos[ix + 2] + waveZ;
-                    // 闪烁时颜色提亮
+                    posArr[ix + 2] = bz + waveZ;
                     colArr[ix] = Math.min(1, boostCol[ix] * sparkle);
                     colArr[ix + 1] = Math.min(1, boostCol[ix + 1] * sparkle);
                     colArr[ix + 2] = Math.min(1, boostCol[ix + 2] * sparkle);
                 }
                 boostGeo.attributes.position.needsUpdate = true;
                 boostGeo.attributes.color.needsUpdate = true;
-                boostMat.size = 0.05 + boostMat.opacity * 0.06;
+                boostMat.size = 0.08 + boostMat.opacity * 0.10;
             } else {
                 boostParticles.visible = false;
+                if (overlayEl) overlayEl.classList.remove('active');
             }
 
             // 渲染

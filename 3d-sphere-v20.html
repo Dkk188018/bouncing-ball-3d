@@ -1494,12 +1494,29 @@
         document.getElementById('winMenuBtn').addEventListener('click', () => showLevelSelect());
         document.getElementById('overMenuBtn').addEventListener('click', () => showLevelSelect());
 
-        // ===== 鼠标控制 =====
+        // ===== 鼠标/触屏控制 =====
+        let lastTouchX = 0;
         document.addEventListener('mousemove', (e) => {
             if (gameState !== 'playing') return;
             ballX += e.movementX * MOUSE_SENSITIVITY;
             ballX = Math.max(-BALL_X_LIMIT, Math.min(BALL_X_LIMIT, ballX));
         });
+        document.addEventListener('touchstart', (e) => {
+            if (gameState !== 'playing') return;
+            lastTouchX = e.touches[0].clientX;
+            e.preventDefault();
+        }, { passive: false });
+        document.addEventListener('touchmove', (e) => {
+            if (gameState !== 'playing') return;
+            const dx = e.touches[0].clientX - lastTouchX;
+            ballX += dx * MOUSE_SENSITIVITY * 1.5;
+            ballX = Math.max(-BALL_X_LIMIT, Math.min(BALL_X_LIMIT, ballX));
+            lastTouchX = e.touches[0].clientX;
+            e.preventDefault();
+        }, { passive: false });
+        document.addEventListener('touchend', (e) => {
+            e.preventDefault();
+        }, { passive: false });
 
         // ===== 初始化 =====
         // 轨道在 startLevel → restartGame 中初始化

@@ -583,7 +583,7 @@
         scene.add(stars);
 
         // ===== Boost 粒子特效（两侧） =====
-        const boostParticleCount = 800;
+        const boostParticleCount = 1000;
         const boostGeo = new THREE.BufferGeometry();
         const boostPos = new Float32Array(boostParticleCount * 3);
         const boostCol = new Float32Array(boostParticleCount * 3);
@@ -591,7 +591,7 @@
         for (let i = 0; i < boostParticleCount; i++) {
             // 粒子集中在两侧，中间留空
             const side = Math.random() < 0.5 ? -1 : 1;
-            const x = side * (3.5 + Math.random() * 8);
+            const x = side * (3.0 + Math.random() * 9);
             const y = -2 + Math.random() * 7;
             const z = 3 + Math.random() * 14;
             boostPos[i*3] = x;
@@ -608,7 +608,7 @@
         boostGeo.setAttribute('position', new THREE.BufferAttribute(boostPos, 3));
         boostGeo.setAttribute('color', new THREE.BufferAttribute(boostCol, 3));
         const boostMat = new THREE.PointsMaterial({
-            size: 0.18, vertexColors: true,
+            size: 0.22, vertexColors: true,
             transparent: true, opacity: 0,
             blending: THREE.AdditiveBlending,
             depthWrite: false,
@@ -1736,8 +1736,8 @@
             }
 
             // Boost 粒子翻涌特效
-            const boostOpacityTarget = isBoosting ? 0.5 : 0;
-            boostMat.opacity += (boostOpacityTarget - boostMat.opacity) * Math.min(dt * 2.5, 1);
+            const boostOpacityTarget = isBoosting ? 0.7 : 0;
+            boostMat.opacity += (boostOpacityTarget - boostMat.opacity) * Math.min(dt * 3, 1);
             if (boostMat.opacity > 0.005) {
                 boostParticles.visible = true;
                 const t = now * 0.001;
@@ -1746,16 +1746,15 @@
                     const ix = i * 3;
                     const bx = boostBasePos[ix];
                     const by = boostBasePos[ix + 1];
-                    // 轻柔翻涌，幅度减小
-                    const waveX = Math.sin(t * 1.8 + bx * 0.3 + by * 0.2) * 0.5;
-                    const waveY = Math.cos(t * 1.5 + bx * 0.2 + by * 0.3) * 0.4;
-                    const waveZ = Math.sin(t * 1.2 + bx * 0.3) * 0.5;
+                    const waveX = Math.sin(t * 2.0 + bx * 0.3 + by * 0.2) * 0.8;
+                    const waveY = Math.cos(t * 1.6 + bx * 0.2 + by * 0.3) * 0.6;
+                    const waveZ = Math.sin(t * 1.4 + bx * 0.3) * 0.7;
                     posArr[ix] = bx + waveX;
                     posArr[ix + 1] = by + waveY;
                     posArr[ix + 2] = boostBasePos[ix + 2] + waveZ;
                 }
                 boostGeo.attributes.position.needsUpdate = true;
-                boostMat.size = 0.1 + boostMat.opacity * 0.3;
+                boostMat.size = 0.14 + boostMat.opacity * 0.5;
             } else {
                 boostParticles.visible = false;
             }

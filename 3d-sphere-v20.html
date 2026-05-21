@@ -1,0 +1,1665 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D 球体物理弹跳 v20</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { overflow: hidden; background: #0a0a1a; cursor: none; }
+        canvas { display: block; }
+        #info {
+            position: absolute; bottom: 20px; left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255,255,255,0.6);
+            font-family: 'Segoe UI', sans-serif; font-size: 13px;
+            pointer-events: none;
+        }
+        #combo {
+            position: absolute; top: 6%; left: 50%;
+            transform: translateX(-50%);
+            text-align: center; pointer-events: none;
+            opacity: 0; transition: opacity 0.15s;
+        }
+        #combo.show { opacity: 1; }
+        #comboText {
+            font-family: 'Segoe UI', sans-serif; font-size: 42px; font-weight: 900;
+            color: #fff; letter-spacing: 6px;
+        }
+        #comboCount {
+            font-family: 'Segoe UI', sans-serif; font-size: 28px; font-weight: 700;
+            color: #fff; margin-top: 4px;
+        }
+        #gameOver {
+            display: none;
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.75);
+            flex-direction: column; align-items: center; justify-content: center;
+            z-index: 10;
+        }
+        #gameOver.show { display: flex; }
+        #gameOver h1 {
+            font-family: 'Segoe UI', sans-serif; font-size: 64px; font-weight: 900;
+            color: #ff4444; text-shadow: 0 0 30px rgba(255,68,68,0.6), 0 0 60px rgba(255,68,68,0.3);
+            margin-bottom: 40px; letter-spacing: 6px;
+        }
+        #gameOver button {
+            font-family: 'Segoe UI', sans-serif; font-size: 22px; font-weight: 700;
+            padding: 16px 48px; border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 12px; background: rgba(255,255,255,0.1);
+            color: #fff; cursor: pointer; transition: all 0.2s;
+            backdrop-filter: blur(10px);
+        }
+        #gameOver button:hover {
+            background: rgba(255,255,255,0.25); border-color: rgba(255,255,255,0.6);
+            transform: scale(1.05);
+        }
+        #winScreen {
+            display: none;
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.75);
+            flex-direction: column; align-items: center; justify-content: center;
+            z-index: 10;
+        }
+        #winScreen.show { display: flex; }
+        #winScreen h1 {
+            font-family: 'Segoe UI', sans-serif; font-size: 64px; font-weight: 900;
+            color: #44ffaa; text-shadow: 0 0 30px rgba(68,255,170,0.6), 0 0 60px rgba(68,255,170,0.3);
+            margin-bottom: 20px; letter-spacing: 6px;
+        }
+        #winScreen p {
+            font-family: 'Segoe UI', sans-serif; font-size: 20px; font-weight: 400;
+            color: rgba(255,255,255,0.7); margin-bottom: 40px;
+        }
+        #winScreen button {
+            font-family: 'Segoe UI', sans-serif; font-size: 22px; font-weight: 700;
+            padding: 16px 48px; border: 2px solid rgba(68,255,170,0.4);
+            border-radius: 12px; background: rgba(68,255,170,0.1);
+            color: #fff; cursor: pointer; transition: all 0.2s;
+            backdrop-filter: blur(10px);
+        }
+        #winScreen button:hover {
+            background: rgba(68,255,170,0.25); border-color: rgba(68,255,170,0.7);
+            transform: scale(1.05);
+        }
+        #distanceHUD {
+            position: absolute; top: 30px; right: 36px;
+            text-align: right; pointer-events: none;
+            font-family: 'Segoe UI', sans-serif;
+        }
+        #currentDist {
+            font-size: 48px; font-weight: 900; color: #e0e8ff;
+            text-shadow: 0 0 12px rgba(120,160,255,0.8), 0 0 30px rgba(80,120,255,0.4), 0 0 60px rgba(60,80,200,0.2);
+            letter-spacing: 2px; line-height: 1;
+        }
+        #currentDistUnit {
+            font-size: 22px; font-weight: 400; color: rgba(180,200,255,0.7);
+            margin-left: 4px; vertical-align: baseline;
+        }
+        #targetDist {
+            font-size: 16px; font-weight: 400; color: rgba(160,180,255,0.5);
+            margin-top: 6px; letter-spacing: 1px;
+            text-shadow: 0 0 8px rgba(100,140,255,0.3);
+        }
+        /* ===== 关卡选择 ===== */
+        #levelSelect {
+            display: flex;
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(ellipse at 50% 40%, rgba(15,10,35,0.92) 0%, rgba(3,2,12,0.98) 70%);
+            flex-direction: column; align-items: center; justify-content: center;
+            z-index: 20; overflow: hidden;
+        }
+        #levelSelect.hidden { display: none; }
+
+        /* 背景装饰光晕 */
+        .bg-orb {
+            position: absolute; border-radius: 50%; pointer-events: none;
+            filter: blur(80px); opacity: 0.15;
+        }
+        .bg-orb.orb1 {
+            width: 600px; height: 600px; top: -15%; left: -10%;
+            background: radial-gradient(circle, rgba(255,160,50,0.6), transparent 70%);
+            animation: orbFloat 12s ease-in-out infinite alternate;
+        }
+        .bg-orb.orb2 {
+            width: 500px; height: 500px; bottom: -20%; right: -8%;
+            background: radial-gradient(circle, rgba(100,60,200,0.5), transparent 70%);
+            animation: orbFloat 15s ease-in-out infinite alternate-reverse;
+        }
+        .bg-orb.orb3 {
+            width: 300px; height: 300px; top: 30%; right: 15%;
+            background: radial-gradient(circle, rgba(50,120,255,0.4), transparent 70%);
+            animation: orbFloat 10s ease-in-out infinite alternate;
+        }
+        @keyframes orbFloat {
+            0% { transform: translate(0, 0) scale(1); }
+            100% { transform: translate(30px, -20px) scale(1.15); }
+        }
+
+        /* 星尘粒子背景 */
+        .stardust {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; overflow: hidden;
+        }
+        .stardust i {
+            position: absolute; width: 2px; height: 2px;
+            background: rgba(255,255,255,0.6); border-radius: 50%;
+            animation: twinkle var(--dur) ease-in-out infinite alternate;
+        }
+        @keyframes twinkle {
+            0% { opacity: 0.1; transform: scale(0.5); }
+            100% { opacity: 0.8; transform: scale(1.2); }
+        }
+
+        /* 标题 */
+        #levelSelect .ls-title {
+            font-family: 'Segoe UI', sans-serif; font-size: 56px; font-weight: 200;
+            color: rgba(255,255,255,0.9); letter-spacing: 18px;
+            text-transform: uppercase; margin-bottom: 4px;
+            text-shadow: 0 0 40px rgba(255,170,60,0.3), 0 0 80px rgba(255,170,60,0.1);
+            position: relative; z-index: 1;
+        }
+        #levelSelect .ls-subtitle {
+            font-family: 'Segoe UI', sans-serif; font-size: 13px; font-weight: 400;
+            color: rgba(255,170,60,0.5); letter-spacing: 6px;
+            text-transform: uppercase; margin-bottom: 50px;
+            position: relative; z-index: 1;
+        }
+        .ls-line {
+            width: 120px; height: 1px; margin-bottom: 50px;
+            background: linear-gradient(90deg, transparent, rgba(255,170,60,0.4), transparent);
+            position: relative; z-index: 1;
+        }
+
+        /* 关卡卡片容器 */
+        #levelGrid {
+            display: flex; flex-wrap: wrap; gap: 20px;
+            width: 420px; margin-bottom: 40px;
+            position: relative; z-index: 1;
+            justify-content: center;
+        }
+
+        /* 关卡卡片 */
+        .level-card {
+            width: 120px; height: 150px; padding: 0;
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 14px; cursor: pointer;
+            position: relative; overflow: hidden;
+            background: linear-gradient(170deg, rgba(255,255,255,0.03) 0%, rgba(0,0,0,0.4) 100%);
+            backdrop-filter: blur(12px);
+            transition: all 0.35s cubic-bezier(0.23, 1, 0.32, 1);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+        .level-card::before {
+            content: ''; position: absolute; top: 0; left: 0; right: 0;
+            height: 50px; border-radius: 14px 14px 0 0;
+            opacity: 0.1; transition: opacity 0.4s;
+        }
+        .level-card::after {
+            content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 2px;
+            background: var(--accent); opacity: 0.5; transition: opacity 0.4s;
+        }
+        .level-card:hover {
+            transform: translateY(-8px) scale(1.04);
+            border-color: rgba(255,255,255,0.15);
+            box-shadow: 0 16px 40px rgba(0,0,0,0.5), 0 0 30px var(--glow);
+        }
+        .level-card:hover::before { opacity: 0.2; }
+        .level-card:hover::after { opacity: 1; }
+
+        /* 每关独特主题色 */
+        .level-card[data-lv="1"] { --accent: #4dc9f6; --glow: rgba(77,201,246,0.12); }
+        .level-card[data-lv="1"]::before { background: linear-gradient(135deg, #4dc9f6, #1a6fa0); }
+        .level-card[data-lv="2"] { --accent: #f6a623; --glow: rgba(246,166,35,0.12); }
+        .level-card[data-lv="2"]::before { background: linear-gradient(135deg, #f6a623, #a06b10); }
+        .level-card[data-lv="3"] { --accent: #9b59b6; --glow: rgba(155,89,182,0.12); }
+        .level-card[data-lv="3"]::before { background: linear-gradient(135deg, #9b59b6, #5b2c7a); }
+        .level-card[data-lv="4"] { --accent: #e74c3c; --glow: rgba(231,76,60,0.12); }
+        .level-card[data-lv="4"]::before { background: linear-gradient(135deg, #e74c3c, #8b1a10); }
+        .level-card[data-lv="5"] { --accent: #f0e68c; --glow: rgba(240,230,140,0.12); }
+        .level-card[data-lv="5"]::before { background: linear-gradient(135deg, #f0e68c, #8a8040); }
+
+        /* 卡片中心图标 */
+        .level-card .lv-icon {
+            width: 40px; height: 40px; margin-bottom: 8px;
+            border: 1.5px solid var(--accent); border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 17px; color: var(--accent);
+            position: relative; z-index: 1;
+            box-shadow: 0 0 16px var(--glow);
+            transition: all 0.35s;
+        }
+        .level-card:hover .lv-icon {
+            box-shadow: 0 0 24px var(--glow), 0 0 48px var(--glow);
+            transform: scale(1.1);
+        }
+
+        .level-card .lv-name {
+            font-family: 'Segoe UI', sans-serif; font-size: 13px; font-weight: 600;
+            color: rgba(255,255,255,0.8); letter-spacing: 1px;
+            position: relative; z-index: 1; margin-bottom: 2px;
+            transition: color 0.3s;
+        }
+        .level-card:hover .lv-name { color: var(--accent); }
+
+        .level-card .lv-num {
+            font-family: 'Segoe UI', sans-serif; font-size: 10px; font-weight: 400;
+            color: rgba(255,255,255,0.2); letter-spacing: 2px;
+            position: relative; z-index: 1; text-transform: uppercase;
+        }
+
+        .level-card.locked {
+            opacity: 0.3;
+            cursor: not-allowed;
+            filter: grayscale(0.9);
+        }
+        .level-card.locked:hover {
+            transform: none;
+            border-color: rgba(255,255,255,0.06);
+            box-shadow: none;
+        }
+        .level-card.locked .lv-icon {
+            border-color: rgba(255,255,255,0.12);
+            color: rgba(255,255,255,0.2);
+            box-shadow: none;
+        }
+        .level-card.locked .lv-name { color: rgba(255,255,255,0.2); }
+        .level-card.locked::after { opacity: 0; }
+        .level-card .lv-lock {
+            font-size: 9px; color: rgba(255,255,255,0.25);
+            margin-top: 4px; position: relative; z-index: 1;
+            letter-spacing: 1px;
+        }
+
+        /* 关卡名称HUD */
+        #levelHUD {
+            position: absolute; top: 30px; left: 36px;
+            pointer-events: none; font-family: 'Segoe UI', sans-serif;
+        }
+        #levelHUD .lv-label {
+            font-size: 12px; font-weight: 400; color: rgba(160,180,255,0.4);
+            letter-spacing: 2px; text-transform: uppercase;
+        }
+        #levelHUD .lv-title {
+            font-size: 26px; font-weight: 800; color: #c0d0ff;
+            text-shadow: 0 0 12px rgba(120,160,255,0.5), 0 0 30px rgba(80,120,255,0.2);
+            letter-spacing: 2px; margin-top: 2px;
+        }
+    </style>
+</head>
+<body>
+    <!-- 关卡选择 -->
+    <div id="levelSelect">
+        <div class="bg-orb orb1"></div>
+        <div class="bg-orb orb2"></div>
+        <div class="bg-orb orb3"></div>
+        <div class="stardust" id="stardust"></div>
+        <div class="ls-title">Interstellar</div>
+        <div class="ls-subtitle">选择任务区域</div>
+        <div class="ls-line"></div>
+        <div id="levelGrid"></div>
+    </div>
+    <!-- 游戏内HUD -->
+    <div id="levelHUD">
+        <div class="lv-label" id="lvLabel">LEVEL 1</div>
+        <div class="lv-title" id="lvTitle">水之星</div>
+    </div>
+    <div id="info">鼠标左右移动控制球 | 踩到同色方块安全，不同色则碎裂</div>
+    <div id="distanceHUD">
+        <div><span id="currentDist">0</span><span id="currentDistUnit">m</span></div>
+        <div id="targetDist">目标: ???m</div>
+    </div>
+    <div id="combo"><div id="comboText">PERFECT</div><div id="comboCount">x1</div></div>
+    <div id="gameOver">
+        <h1>GAME OVER</h1>
+        <div style="display:flex;gap:16px;">
+            <button id="restartBtn">重新开始</button>
+            <button id="overMenuBtn" style="border-color:rgba(255,255,255,0.3);background:rgba(255,255,255,0.1);">返回选关</button>
+        </div>
+    </div>
+    <div id="winScreen">
+        <h1>YOU WIN!</h1>
+        <p id="winMsg">成功逃逸黑洞引力场</p>
+        <div style="display:flex;gap:16px;">
+            <button id="winNextBtn">下一关</button>
+            <button id="winMenuBtn" style="border-color:rgba(255,255,255,0.3);background:rgba(255,255,255,0.1);">返回选关</button>
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+    <script>
+
+        // ===== 物理常量 =====
+        const GRAVITY = 14;
+        const BOUNCE_HEIGHT = 2.2;
+        const FALL_TIME = Math.sqrt(2 * BOUNCE_HEIGHT / GRAVITY);
+        const BOUNCE_PERIOD = 2 * FALL_TIME;
+
+        const BALL_RADIUS = 0.8;
+        const GROUND_Y = -0.95;
+        const COLLISION_Y = GROUND_Y + BALL_RADIUS;
+        const MOUSE_SENSITIVITY = 0.008;
+        const BALL_X_LIMIT = 4.0;
+
+        // ===== 颜色系统 =====
+        const COLORS = [
+            0xff68fd, 0xffe528, 0x15befc, 0x68ff68,
+            0xff6868, 0xffa040, 0xc868ff, 0x68ffe0
+        ];
+        function pickColor() { return COLORS[Math.floor(Math.random() * COLORS.length)]; }
+        function pickColorsExclude(n, exclude) {
+            let arr = COLORS.filter(c => c !== exclude).sort(() => Math.random() - 0.5);
+            if (arr.length < n) arr = [...COLORS].sort(() => Math.random() - 0.5);
+            return arr.slice(0, n);
+        }
+
+        // ===== 轨道参数 =====
+        const TRACK_HEIGHT = 0.1;
+        const BLOCK_Y = GROUND_Y - TRACK_HEIGHT / 2;
+        const GROUP_COUNT = 20;
+        const GROUP_GAP = 3.0;
+        const VISIBLE_RANGE = 6;
+
+        const TRACK_TYPES = {
+            1: { halfLen: 1.2 },
+            2: { halfLen: 0.45 },
+            3: { halfLen: 0.5 },
+        };
+        // ===== 游戏状态（提前声明，避免TDZ）=====
+        let gameState = 'menu';
+        let currentLevel = null;
+        let currentTypes = [1, 2, 3];
+        let WIN_COLLISIONS = 20;
+
+        // ===== 关卡系统 =====
+        const LEVELS = [
+            { id: 1, name: '水之星', nameEn: "Miller's Planet", types: [1], winCollisions: 1, desc: '长直轨道 · 1跳通关' },
+            { id: 2, name: '永恒号', nameEn: 'Endurance', types: [1, 3], winCollisions: 10, desc: '长直+两方块 · 10跳通关' },
+            { id: 3, name: '虫洞', nameEn: 'Wormhole', types: [1, 3, 2], winCollisions: 20, desc: '全部轨道 · 20跳通关' },
+            { id: 4, name: '卡冈图雅', nameEn: 'Gargantua', types: [1, 3, 2], winCollisions: 200, desc: '全部轨道 · 200跳通关' },
+            { id: 5, name: '第五维度', nameEn: 'Fifth Dimension', types: [1, 3, 2], winCollisions: 2000, desc: '全部轨道 · 2000跳通关' },
+        ];
+
+        // ===== 关卡解锁系统 =====
+        const SAVE_KEY = 'interstellar_unlock';
+        function loadUnlocked() {
+            try { const v = JSON.parse(localStorage.getItem(SAVE_KEY)); if (Array.isArray(v)) return v; } catch(e) {}
+            return [1]; // 默认只解锁第1关
+        }
+        function saveUnlocked(arr) {
+            try { localStorage.setItem(SAVE_KEY, JSON.stringify(arr)); } catch(e) {}
+        }
+        let unlockedLevels = loadUnlocked();
+        function isLevelUnlocked(id) { return unlockedLevels.includes(id); }
+        function unlockLevel(id) {
+            if (!isLevelUnlocked(id)) {
+                unlockedLevels.push(id);
+                saveUnlocked(unlockedLevels);
+            }
+        }
+
+        function randomType() {
+            return currentTypes[Math.floor(Math.random() * currentTypes.length)];
+        }
+
+        function showLevelSelect() {
+            unlockedLevels = loadUnlocked(); // 刷新解锁状态
+            buildLevelGrid(); // 重建卡片
+            document.getElementById('levelSelect').classList.remove('hidden');
+            document.getElementById('levelHUD').style.display = 'none';
+            document.getElementById('distanceHUD').style.display = 'none';
+            document.getElementById('info').style.display = 'none';
+            gameState = 'menu';
+            document.body.style.cursor = 'auto';
+        }
+
+        function hideLevelSelect() {
+            document.getElementById('levelSelect').classList.add('hidden');
+            document.getElementById('levelHUD').style.display = 'block';
+            document.getElementById('distanceHUD').style.display = 'block';
+            document.getElementById('info').style.display = 'block';
+            document.body.style.cursor = 'none';
+        }
+
+        const LEVEL_ICONS = ['🌊', '🚀', '🌀', '🕳️', '✨'];
+
+        function buildLevelGrid() {
+            const grid = document.getElementById('levelGrid');
+            grid.innerHTML = '';
+            LEVELS.forEach((lv, idx) => {
+                const unlocked = isLevelUnlocked(lv.id);
+                const card = document.createElement('div');
+                card.className = 'level-card' + (unlocked ? '' : ' locked');
+                card.setAttribute('data-lv', lv.id);
+                card.innerHTML = `
+                    <div class="lv-icon">${unlocked ? LEVEL_ICONS[idx] : '🔒'}</div>
+                    <div class="lv-name">${unlocked ? lv.name : '---'}</div>
+                    <div class="lv-num">Level ${lv.id}</div>
+                    ${unlocked ? '' : '<div class="lv-lock">未解锁</div>'}
+                `;
+                if (unlocked) {
+                    card.addEventListener('click', () => startLevel(lv));
+                }
+                // 入场延迟动画
+                card.style.opacity = '0';
+                card.style.transform = 'translateY(30px)';
+                setTimeout(() => {
+                    card.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+                    card.style.opacity = unlocked ? '1' : '1';
+                    card.style.transform = 'translateY(0)';
+                }, 100 + idx * 80);
+                grid.appendChild(card);
+            });
+            // 生成星尘
+            const dust = document.getElementById('stardust');
+            dust.innerHTML = '';
+            for (let i = 0; i < 60; i++) {
+                const star = document.createElement('i');
+                star.style.left = Math.random() * 100 + '%';
+                star.style.top = Math.random() * 100 + '%';
+                star.style.setProperty('--dur', (2 + Math.random() * 4) + 's');
+                star.style.animationDelay = Math.random() * 3 + 's';
+                star.style.width = (1 + Math.random() * 2) + 'px';
+                star.style.height = star.style.width;
+                dust.appendChild(star);
+            }
+        }
+
+        function startLevel(lv) {
+            currentLevel = lv;
+            currentTypes = lv.types;
+            WIN_COLLISIONS = lv.winCollisions;
+            document.getElementById('lvLabel').textContent = 'LEVEL ' + lv.id;
+            document.getElementById('lvTitle').textContent = lv.name;
+            document.getElementById('lvTitle').style.color = '#c0d0ff';
+            document.getElementById('lvTitle').style.textShadow = '0 0 12px rgba(120,160,255,0.5), 0 0 30px rgba(80,120,255,0.2)';
+            hideLevelSelect();
+            restartGame();
+        }
+
+        // ===== 场景 =====
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0a1a);
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 3.5, 9);
+        camera.lookAt(0, 0, 0);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        // ===== 球体 =====
+        function createPlanetTexture() {
+            const c = document.createElement('canvas');
+            c.width = 512; c.height = 512;
+            const ctx = c.getContext('2d');
+            const grad = ctx.createRadialGradient(200, 180, 30, 256, 256, 280);
+            grad.addColorStop(0, '#a8d8ff');
+            grad.addColorStop(0.25, '#6bb3e8');
+            grad.addColorStop(0.5, '#3a7ec5');
+            grad.addColorStop(0.75, '#1e4f8a');
+            grad.addColorStop(1, '#0d2847');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, 512, 512);
+            for (let i = 0; i < 40; i++) {
+                const x = Math.random() * 512, y = Math.random() * 512;
+                const r = 10 + Math.random() * 40;
+                const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+                const a = 0.03 + Math.random() * 0.06;
+                g.addColorStop(0, Math.random() > 0.5 ? `rgba(160,200,255,${a})` : `rgba(80,140,220,${a})`);
+                g.addColorStop(1, 'rgba(0,0,0,0)');
+                ctx.fillStyle = g;
+                ctx.fillRect(x - r, y - r, r * 2, r * 2);
+            }
+            return new THREE.CanvasTexture(c);
+        }
+
+        const sphere = new THREE.Mesh(
+            new THREE.SphereGeometry(BALL_RADIUS, 64, 64),
+            new THREE.MeshPhysicalMaterial({
+                map: createPlanetTexture(), metalness: 0.05, roughness: 0.6,
+                clearcoat: 0.3, clearcoatRoughness: 0.3,
+                emissive: 0x1a3050, emissiveIntensity: 0.1, envMapIntensity: 0.4
+            })
+        );
+        sphere.castShadow = true;
+        scene.add(sphere);
+
+        // 星尘环绕
+        const orbitGroup = new THREE.Group();
+        scene.add(orbitGroup);
+        const dustCount = 30, dustPos = new Float32Array(dustCount * 3), dustCol = new Float32Array(dustCount * 3);
+        for (let i = 0; i < dustCount; i++) {
+            const a = Math.random() * Math.PI * 2, r = 1.4 + Math.random() * 1.2;
+            dustPos[i*3] = Math.cos(a) * r; dustPos[i*3+1] = (Math.random() - 0.5) * 1.5; dustPos[i*3+2] = Math.sin(a) * r;
+            const b = 0.4 + Math.random() * 0.6;
+            dustCol[i*3] = b * 0.6; dustCol[i*3+1] = b * 0.8; dustCol[i*3+2] = b;
+        }
+        const dustGeo = new THREE.BufferGeometry();
+        dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
+        dustGeo.setAttribute('color', new THREE.BufferAttribute(dustCol, 3));
+        const dustParticles = new THREE.Points(dustGeo, new THREE.PointsMaterial({ size: 0.04, vertexColors: true, transparent: true, opacity: 0.6 }));
+        orbitGroup.add(dustParticles);
+
+        // 灯光
+        scene.add(new THREE.AmbientLight(0x404080, 0.5));
+        const mainLight = new THREE.DirectionalLight(0xffffff, 2);
+        mainLight.position.set(5, 5, 5); mainLight.castShadow = true; scene.add(mainLight);
+        scene.add(new THREE.DirectionalLight(0x4080ff, 1).translateX(-3).translateY(2));
+        scene.add(new THREE.DirectionalLight(0xff4080, 0.8).translateY(-2).translateZ(-4));
+
+        // 星空
+        const starsGeo = new THREE.BufferGeometry(), starsPos = new Float32Array(6000);
+        for (let i = 0; i < 6000; i++) {
+            const r = 50 + Math.random() * 100, t = Math.random() * Math.PI * 2, p = Math.acos(2 * Math.random() - 1);
+            starsPos[i*3] = r * Math.sin(p) * Math.cos(t); starsPos[i*3+1] = r * Math.sin(p) * Math.sin(t); starsPos[i*3+2] = r * Math.cos(p);
+        }
+        starsGeo.setAttribute('position', new THREE.BufferAttribute(starsPos, 3));
+        const stars = new THREE.Points(starsGeo, new THREE.PointsMaterial({ size: 0.5, transparent: true, opacity: 0.8 }));
+        scene.add(stars);
+
+        // ===== 轨道材质 =====
+        function makeTopMat(color) {
+            return new THREE.MeshPhysicalMaterial({
+                color, metalness: 0.3, roughness: 0.2,
+                clearcoat: 1.0, clearcoatRoughness: 0.05,
+                emissive: color, emissiveIntensity: 0.5
+            });
+        }
+        function makeSideMat(color) {
+            return new THREE.MeshStandardMaterial({ color, metalness: 0.1, roughness: 0.6 });
+        }
+        // 创建白色向前箭头纹理
+        function createArrowTexture() {
+            const size = 256;
+            const c = document.createElement('canvas');
+            c.width = size; c.height = size;
+            const ctx = c.getContext('2d');
+            ctx.clearRect(0, 0, size, size);
+            ctx.fillStyle = '#ffffff';
+            const cx = size / 2;
+            // 箭头三角（朝上/前方）
+            ctx.beginPath();
+            ctx.moveTo(cx, 45);
+            ctx.lineTo(cx + 45, 105);
+            ctx.lineTo(cx - 45, 105);
+            ctx.closePath();
+            ctx.fill();
+            // 箭杆
+            ctx.fillRect(cx - 18, 106, 36, 95);
+            const tex = new THREE.CanvasTexture(c);
+            tex.needsUpdate = true;
+            return tex;
+        }
+        const arrowTexture = createArrowTexture();
+
+        function makeTopMat(color) {
+            return new THREE.MeshPhysicalMaterial({
+                color, metalness: 0.3, roughness: 0.2,
+                clearcoat: 1.0, clearcoatRoughness: 0.05,
+                emissive: color, emissiveIntensity: 0.5
+            });
+        }
+        function makeBlock(w, d, topColor) {
+            const geo = new THREE.BoxGeometry(w, TRACK_HEIGHT, d);
+            const topMat = makeTopMat(topColor);
+            const sideMat = makeSideMat(topColor);
+            const mats = [];
+            for (let i = 0; i < 6; i++) mats.push(i === 2 ? topMat : sideMat);
+            return new THREE.Mesh(geo, mats);
+        }
+        // 在方块顶面叠加白色箭头面片
+        function addArrowDecal(parent, blockW, blockD) {
+            const geo = new THREE.PlaneGeometry(blockW * 0.8, blockD);
+            const mat = new THREE.MeshBasicMaterial({
+                map: arrowTexture, transparent: true, depthWrite: false
+            });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.rotation.x = -Math.PI / 2;
+            mesh.position.y = TRACK_HEIGHT / 2 + 0.005;
+            parent.add(mesh);
+            return mesh;
+        }
+
+        // ===== 轨道组系统 =====
+        const trackGroups = [];
+
+        function randRange(min, max) { return min + Math.random() * (max - min); }
+
+        function clearGroup(group) {
+            for (const m of group.meshes) {
+                scene.remove(m);
+                m.geometry.dispose();
+                if (Array.isArray(m.material)) m.material.forEach(mat => mat.dispose());
+                else m.material.dispose();
+            }
+            group.meshes = [];
+        }
+
+        // 创建轨道组，ballColor 当前球颜色（type2/3 会确保有一个同色方块）
+        function buildGroup(centerZ, forcedType, ballColor) {
+            const type = forcedType || randomType();
+            const meshes = [];
+            const halfLen = TRACK_TYPES[type].halfLen;
+            let mainColor = 0xffffff;
+            const blocks = []; // { x, halfW, color } 每个方块的信息
+
+            if (type === 1) {
+                const w = randRange(2.2, 3.8);
+                const color = pickColor();
+                mainColor = color;
+                const mesh = makeBlock(w, 1.2, color);
+                mesh.position.set(0, BLOCK_Y, centerZ);
+                scene.add(mesh);
+                meshes.push(mesh);
+                blocks.push({ x: 0, halfW: w / 2, color, mesh });
+
+            } else if (type === 2) {
+                const totalW = randRange(2.0, 3.5);
+                const gap = randRange(0.12, 0.25);
+                const sizeX = (totalW - gap * 2) / 3;
+                const sizeZ = 0.9;
+                const safeIdx = Math.floor(Math.random() * 3);
+                const colors = [];
+                for (let i = 0; i < 3; i++) {
+                    if (i === safeIdx) colors.push(ballColor || pickColor());
+                    else {
+                        let c = pickColor();
+                        while (c === (ballColor || 0)) c = pickColor();
+                        colors.push(c);
+                    }
+                }
+                mainColor = colors[safeIdx];
+                const startX = -totalW / 2 + sizeX / 2;
+                for (let i = 0; i < 3; i++) {
+                    const mesh = makeBlock(sizeX, sizeZ, colors[i]);
+                    const bx = startX + i * (sizeX + gap);
+                    mesh.position.set(bx, BLOCK_Y, centerZ);
+                    addArrowDecal(mesh, sizeX, sizeZ);
+                    scene.add(mesh);
+                    meshes.push(mesh);
+                    blocks.push({ x: bx, halfW: sizeX / 2, color: colors[i], isSafe: i === safeIdx, mesh });
+                }
+
+            } else {
+                const totalW = randRange(1.8, 3.2);
+                const gap = randRange(0.2, 0.5);
+                const sizeX = (totalW - gap) / 2;
+                const sizeZ = 1.0;
+                const safeIdx = Math.floor(Math.random() * 2);
+                const colors = [];
+                for (let i = 0; i < 2; i++) {
+                    if (i === safeIdx) colors.push(ballColor || pickColor());
+                    else {
+                        let c = pickColor();
+                        while (c === (ballColor || 0)) c = pickColor();
+                        colors.push(c);
+                    }
+                }
+                mainColor = colors[safeIdx];
+                const startX = -totalW / 2 + sizeX / 2;
+                for (let i = 0; i < 2; i++) {
+                    const mesh = makeBlock(sizeX, sizeZ, colors[i]);
+                    const bx = startX + i * (sizeX + gap);
+                    mesh.position.set(bx, BLOCK_Y, centerZ);
+                    addArrowDecal(mesh, sizeX, sizeZ);
+                    scene.add(mesh);
+                    meshes.push(mesh);
+                    blocks.push({ x: bx, halfW: sizeX / 2, color: colors[i], isSafe: i === safeIdx, mesh });
+                }
+            }
+
+            return { type, meshes, centerZ, halfLen, mainColor, blocks };
+        }
+
+        // ===== 游戏变量 =====
+        let ballY = COLLISION_Y;
+        let ballX = 0;
+        let ballVY = 0;
+        let scrollSpeed = 0;
+        let currentBallColor = 0;
+        let backEdgeZ = 0;
+        let dyingTimer = 0;
+        const DYING_DURATION = 1.0;
+        let collisionCount = 0;
+        let totalDistance = 0; // 累计行进距离
+        const currentDistEl = document.getElementById('currentDist');
+        const targetDistEl = document.getElementById('targetDist');
+
+        // ===== 黑洞系统 =====
+        let blackHole = null;
+        let bhGlowTex = null;
+        let blackHoleParticles = null;
+        let blackHoleParticleVel = [];
+        let blackHoleZ = 0;
+        let blackHoleSpawned = false;
+        let bhSuctionForce = 0; // 粒子动画强度（不再影响球物理）
+        let winningTimer = 0; // 进入黑洞后的吸入动画计时
+
+        function createBlackHoleTexture() {
+            const size = 512;
+            const c = document.createElement('canvas');
+            c.width = size; c.height = size;
+            const ctx = c.getContext('2d');
+            // 多层径向渐变，从中心深黑到边缘全透明
+            const grad = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
+            grad.addColorStop(0, 'rgba(0,0,0,1)');
+            grad.addColorStop(0.15, 'rgba(2,0,10,0.98)');
+            grad.addColorStop(0.3, 'rgba(20,0,50,0.85)');
+            grad.addColorStop(0.45, 'rgba(60,10,120,0.55)');
+            grad.addColorStop(0.6, 'rgba(100,30,180,0.3)');
+            grad.addColorStop(0.75, 'rgba(130,60,220,0.12)');
+            grad.addColorStop(0.9, 'rgba(100,80,255,0.03)');
+            grad.addColorStop(1, 'rgba(80,60,255,0)');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, size, size);
+            return new THREE.CanvasTexture(c);
+        }
+
+        // 黑洞外环发光纹理
+        function createRingGlowTexture() {
+            const size = 512;
+            const c = document.createElement('canvas');
+            c.width = size; c.height = size;
+            const ctx = c.getContext('2d');
+            const cx = size / 2, cy = size / 2;
+            // 环形渐变：外圈亮，内圈暗
+            const innerR = size * 0.32, outerR = size * 0.48;
+            for (let r = outerR; r > innerR; r -= 1) {
+                const t = (r - innerR) / (outerR - innerR);
+                const alpha = Math.sin(t * Math.PI) * 0.6;
+                ctx.strokeStyle = `rgba(${100 + t * 80},${30 + t * 40},${180 + t * 75},${alpha})`;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+            return new THREE.CanvasTexture(c);
+        }
+
+        // 黑洞事件视界边缘纹理
+        function createEventHorizonTexture() {
+            const size = 512;
+            const c = document.createElement('canvas');
+            c.width = size; c.height = size;
+            const ctx = c.getContext('2d');
+            const cx = size / 2, cy = size / 2;
+            // 旋转扭曲光环
+            const grad = ctx.createRadialGradient(cx, cy, size * 0.25, cx, cy, size * 0.5);
+            grad.addColorStop(0, 'rgba(0,0,0,0)');
+            grad.addColorStop(0.3, 'rgba(180,120,255,0.15)');
+            grad.addColorStop(0.5, 'rgba(255,200,100,0.25)');
+            grad.addColorStop(0.7, 'rgba(200,100,255,0.2)');
+            grad.addColorStop(0.85, 'rgba(100,50,200,0.1)');
+            grad.addColorStop(1, 'rgba(50,20,150,0)');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, size, size);
+            return new THREE.CanvasTexture(c);
+        }
+
+        function createBlackHole(targetZ) {
+            blackHoleZ = targetZ;
+            bhSuctionForce = 0;
+            const group = new THREE.Group();
+            // 黑洞中心在轨道平面高度
+            group.position.set(0, BLOCK_Y + TRACK_HEIGHT / 2, targetZ);
+            scene.add(group);
+
+            // 第1层：事件视界 - 深黑核心
+            bhGlowTex = createBlackHoleTexture();
+            const coreGeo = new THREE.PlaneGeometry(4.5, 4.5);
+            const coreMat = new THREE.MeshBasicMaterial({
+                map: bhGlowTex, transparent: true, depthWrite: false, side: THREE.DoubleSide
+            });
+            const core = new THREE.Mesh(coreGeo, coreMat);
+            // 立面：面朝玩家（+Z方向），不需要旋转，默认面朝Z
+            group.add(core);
+
+            // 第2层：发光外环
+            const ringTex = createRingGlowTexture();
+            const ringGeo = new THREE.PlaneGeometry(6.5, 6.5);
+            const ringMat = new THREE.MeshBasicMaterial({
+                map: ringTex, transparent: true, depthWrite: false, side: THREE.DoubleSide,
+                blending: THREE.AdditiveBlending
+            });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.position.z = 0.01;
+            group.add(ring);
+
+            // 第3层：事件视界光环
+            const ehTex = createEventHorizonTexture();
+            const ehGeo = new THREE.PlaneGeometry(5.5, 5.5);
+            const ehMat = new THREE.MeshBasicMaterial({
+                map: ehTex, transparent: true, depthWrite: false, side: THREE.DoubleSide,
+                blending: THREE.AdditiveBlending
+            });
+            const eh = new THREE.Mesh(ehGeo, ehMat);
+            eh.position.z = -0.02;
+            group.add(eh);
+
+            // 第4层：深色立体边框（椭圆环模拟厚度）
+            const torusGeo = new THREE.TorusGeometry(2.6, 0.12, 16, 64);
+            const torusMat = new THREE.MeshBasicMaterial({
+                color: 0x6030a0, transparent: true, opacity: 0.5
+            });
+            const torus = new THREE.Mesh(torusGeo, torusMat);
+            group.add(torus);
+
+            // 第5层：内部深色立体环（更近的边缘）
+            const innerTorusGeo = new THREE.TorusGeometry(2.1, 0.06, 16, 64);
+            const innerTorusMat = new THREE.MeshBasicMaterial({
+                color: 0x3020a0, transparent: true, opacity: 0.7
+            });
+            const innerTorus = new THREE.Mesh(innerTorusGeo, innerTorusMat);
+            group.add(innerTorus);
+
+            // 旋涡粒子 - 立面螺旋吸入
+            const pCount = 400;
+            const pPos = new Float32Array(pCount * 3);
+            const pCol = new Float32Array(pCount * 3);
+            blackHoleParticleVel = [];
+            for (let i = 0; i < pCount; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const r = 0.5 + Math.random() * 3.5;
+                const yOff = (Math.random() - 0.5) * 4.0;
+                pPos[i * 3] = Math.cos(angle) * r;
+                pPos[i * 3 + 1] = yOff;
+                pPos[i * 3 + 2] = Math.sin(angle) * r * 0.3; // 扁平化，让粒子集中在立面上
+                // 颜色：外围蓝紫，中心亮白
+                const t = r / 4.0;
+                pCol[i * 3] = 0.5 + t * 0.2;
+                pCol[i * 3 + 1] = 0.3 + t * 0.15;
+                pCol[i * 3 + 2] = 0.9 + t * 0.1;
+                blackHoleParticleVel.push({
+                    angle, radius: r, speed: 0.8 + Math.random() * 1.5,
+                    shrink: 0.2 + Math.random() * 0.6, yOff,
+                    initR: r, ySpeed: (Math.random() - 0.5) * 0.3
+                });
+            }
+            const pGeo = new THREE.BufferGeometry();
+            pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+            pGeo.setAttribute('color', new THREE.BufferAttribute(pCol, 3));
+            const pMat = new THREE.PointsMaterial({
+                size: 0.05, transparent: true, opacity: 0.9,
+                vertexColors: true, depthWrite: false,
+                blending: THREE.AdditiveBlending
+            });
+            blackHoleParticles = new THREE.Points(pGeo, pMat);
+            group.add(blackHoleParticles);
+
+            blackHole = group;
+            blackHoleSpawned = true;
+        }
+
+        function updateBlackHole(dt) {
+            if (!blackHole) return;
+            const now = performance.now();
+
+            // 脉冲呼吸 - 核心面片
+            const pulse = 1.0 + Math.sin(now * 0.002) * 0.08;
+            blackHole.children[0].scale.set(pulse, pulse, 1);
+            // 外环反向脉冲
+            const ringPulse = 1.0 + Math.sin(now * 0.002 + 1) * 0.05;
+            blackHole.children[1].scale.set(ringPulse, ringPulse, 1);
+            // 事件视界缓慢旋转
+            blackHole.children[2].rotation.z = now * 0.0003;
+            // torus边缘旋转
+            blackHole.children[3].rotation.z = now * 0.0005;
+            blackHole.children[4].rotation.z = -now * 0.0008;
+
+            // 进入黑洞后的吸入动画阶段：增强粒子
+            if (gameState === 'winning') {
+                bhSuctionForce = Math.min(1, bhSuctionForce + dt * 2.0);
+                // 球缩小 + 螺旋吸入效果
+                const elapsed = (now - winningTimer) / 1000;
+                const t = Math.min(1, elapsed / 0.6); // 0.6秒完成吸入
+                const scale = Math.max(0.01, 1 - t * t);
+                sphere.scale.set(scale, scale, scale);
+                // 球向黑洞中心螺旋移动
+                sphere.position.x += (0 - sphere.position.x) * dt * 5;
+                sphere.position.z += (blackHoleZ - sphere.position.z) * dt * 3;
+                sphere.material.emissiveIntensity = 0.5 + t * 2.0;
+            }
+
+            // 粒子旋涡（基础速度，winning时加速）
+            const speedMul = 1 + bhSuctionForce * 3;
+            const shrinkMul = 1 + bhSuctionForce * 4;
+            const pos = blackHoleParticles.geometry.attributes.position.array;
+            for (let i = 0; i < blackHoleParticleVel.length; i++) {
+                const v = blackHoleParticleVel[i];
+                v.angle += v.speed * dt * speedMul;
+                v.radius -= v.shrink * dt * shrinkMul;
+                v.yOff += v.ySpeed * dt;
+                if (v.radius < 0.15 || Math.abs(v.yOff) > 3) {
+                    v.radius = v.initR;
+                    v.angle = Math.random() * Math.PI * 2;
+                    v.yOff = (Math.random() - 0.5) * 4.0;
+                }
+                pos[i * 3] = Math.cos(v.angle) * v.radius;
+                pos[i * 3 + 1] = v.yOff;
+                pos[i * 3 + 2] = Math.sin(v.angle) * v.radius * 0.3;
+                // 越靠近中心越亮
+                const ct = v.radius / v.initR;
+                const col = blackHoleParticles.geometry.attributes.color.array;
+                col[i * 3] = 0.5 + (1 - ct) * 0.5;
+                col[i * 3 + 1] = 0.3 + (1 - ct) * 0.7;
+                col[i * 3 + 2] = 0.9 + (1 - ct) * 0.1;
+            }
+            blackHoleParticles.geometry.attributes.position.needsUpdate = true;
+            blackHoleParticles.geometry.attributes.color.needsUpdate = true;
+        }
+
+        function clearBlackHole() {
+            if (blackHole) {
+                scene.remove(blackHole);
+                blackHole.children.forEach(c => {
+                    if (c.geometry) c.geometry.dispose();
+                    if (c.material) {
+                        if (c.material.map) c.material.map.dispose();
+                        c.material.dispose();
+                    }
+                });
+                blackHole = null;
+                blackHoleParticles = null;
+                blackHoleParticleVel = [];
+                blackHoleSpawned = false;
+                bhGlowTex = null;
+                bhSuctionForce = 0;
+            }
+        }
+
+        function triggerWin() {
+            if (gameState !== 'playing') return;
+            gameState = 'winning';
+            winningTimer = performance.now();
+            bhSuctionForce = 0;
+            hideCombo();
+            scrollSpeed = 0;
+            // 解锁下一关
+            if (currentLevel) {
+                const nextIdx = LEVELS.findIndex(l => l.id === currentLevel.id) + 1;
+                if (nextIdx < LEVELS.length) {
+                    unlockLevel(LEVELS[nextIdx].id);
+                }
+            }
+            const msg = currentLevel ? `${currentLevel.name} · 成功逃逸黑洞引力场` : '成功逃逸黑洞引力场';
+            document.getElementById('winMsg').textContent = msg;
+            // 最后一关隐藏"下一关"按钮
+            const nextBtn = document.getElementById('winNextBtn');
+            if (currentLevel && currentLevel.id >= LEVELS.length) {
+                nextBtn.textContent = '返回选关';
+                nextBtn.onclick = () => showLevelSelect();
+            } else {
+                nextBtn.textContent = '下一关';
+                nextBtn.onclick = () => {
+                    const nextIdx = LEVELS.findIndex(l => l.id === currentLevel.id) + 1;
+                    if (nextIdx < LEVELS.length) {
+                        startLevel(LEVELS[nextIdx]);
+                    } else {
+                        showLevelSelect();
+                    }
+                };
+            }
+            // 球不立即隐藏，等吸入动画结束再隐藏
+            // 0.6秒后完成吸入动画，显示胜利画面
+            setTimeout(() => {
+                sphere.visible = false;
+                orbitGroup.visible = false;
+                document.getElementById('winScreen').classList.add('show');
+                document.body.style.cursor = 'auto';
+                gameState = 'gameover';
+            }, 700);
+        }
+
+        function checkBlackHoleEntry() {
+            if (!blackHoleSpawned || !blackHole) return false;
+            const dx = ballX - 0;
+            const dz = 0 - blackHoleZ;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+            if (dist < 2.0) return true;
+            return false;
+        }
+
+        // ===== 爆炸粒子系统 =====
+        let explosionParticles = null;
+        let explosionVelocities = null;
+        let explosionStartTime = 0;
+
+        function createExplosion(x, y, color) {
+            const count = 80;
+            const positions = new Float32Array(count * 3);
+            explosionVelocities = [];
+            for (let i = 0; i < count; i++) {
+                positions[i * 3] = x;
+                positions[i * 3 + 1] = y;
+                positions[i * 3 + 2] = 0;
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 2 + Math.random() * 6;
+                const upSpeed = 3 + Math.random() * 8;
+                explosionVelocities.push({
+                    vx: Math.cos(angle) * speed,
+                    vy: upSpeed,
+                    vz: Math.sin(angle) * speed
+                });
+            }
+            const geo = new THREE.BufferGeometry();
+            geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            const mat = new THREE.PointsMaterial({
+                color, size: 0.2, transparent: true, opacity: 1.0
+            });
+            explosionParticles = new THREE.Points(geo, mat);
+            scene.add(explosionParticles);
+            explosionStartTime = performance.now();
+        }
+
+        function updateExplosion() {
+            if (!explosionParticles) return;
+            const elapsed = (performance.now() - explosionStartTime) / 1000;
+            if (elapsed > DYING_DURATION) {
+                scene.remove(explosionParticles);
+                explosionParticles.geometry.dispose();
+                explosionParticles.material.dispose();
+                explosionParticles = null;
+                return;
+            }
+            const pos = explosionParticles.geometry.attributes.position.array;
+            const dt = 0.016;
+            for (let i = 0; i < explosionVelocities.length; i++) {
+                pos[i * 3] += explosionVelocities[i].vx * dt;
+                pos[i * 3 + 1] += explosionVelocities[i].vy * dt;
+                explosionVelocities[i].vy -= 9.8 * dt;
+                pos[i * 3 + 2] += explosionVelocities[i].vz * dt;
+            }
+            explosionParticles.geometry.attributes.position.needsUpdate = true;
+            explosionParticles.material.opacity = 1.0 - (elapsed / DYING_DURATION);
+            explosionParticles.material.size = 0.2 + elapsed * 0.3;
+        }
+
+        function clearExplosion() {
+            if (explosionParticles) {
+                scene.remove(explosionParticles);
+                explosionParticles.geometry.dispose();
+                explosionParticles.material.dispose();
+                explosionParticles = null;
+                explosionVelocities = null;
+            }
+        }
+
+        // ===== 涟漪系统 =====
+        const ripples = [];
+        const RIPPLE_DURATION = 0.6;
+
+        // 创建带径向渐变（羽化）纹理的圆形面片
+        function makeFeatherTexture() {
+            const size = 128;
+            const c = document.createElement('canvas');
+            c.width = size; c.height = size;
+            const ctx = c.getContext('2d');
+            const grad = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
+            grad.addColorStop(0, 'rgba(255,255,255,1)');
+            grad.addColorStop(0.4, 'rgba(255,255,255,0.6)');
+            grad.addColorStop(0.7, 'rgba(255,255,255,0.2)');
+            grad.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, size, size);
+            return new THREE.CanvasTexture(c);
+        }
+        const featherTex = makeFeatherTexture();
+
+        function createRipple(x, z, color, blockW, blockD) {
+            const group = new THREE.Group();
+            group.position.set(x, BLOCK_Y - TRACK_HEIGHT / 2 - 0.02, z);
+            scene.add(group);
+
+            // 多层羽化圆形面片，整片扩散
+            const shadows = [];
+            for (let i = 0; i < 3; i++) {
+                const geo = new THREE.PlaneGeometry(1, 1);
+                const mat = new THREE.MeshBasicMaterial({
+                    map: featherTex, color, transparent: true, opacity: 0.5 - i * 0.1,
+                    side: THREE.DoubleSide, depthWrite: false
+                });
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.rotation.x = -Math.PI / 2;
+                mesh.scale.set(0.5, 0.5, 1);
+                group.add(mesh);
+                shadows.push({ mesh, delay: i * 0.06 });
+            }
+
+            // 粒子沿矩形轮廓飞散
+            const pCount = 32;
+            const pPos = new Float32Array(pCount * 3);
+            const pCol = new Float32Array(pCount * 3);
+            const pVel = [];
+            const c = new THREE.Color(color);
+            const w = blockW || 1.0, d = blockD || 1.0;
+            const hw = w / 2, hd = d / 2;
+            const perimeter = 2 * (w + d);
+            for (let i = 0; i < pCount; i++) {
+                let dist = (i / pCount) * perimeter + (Math.random() - 0.5) * 0.2;
+                let px, pz, nx, nz;
+                if (dist < w) {
+                    px = -hw + dist; pz = -hd; nx = 0; nz = -1;
+                } else if (dist < w + d) {
+                    dist -= w; px = hw; pz = -hd + dist; nx = 1; nz = 0;
+                } else if (dist < 2 * w + d) {
+                    dist -= (w + d); px = hw - dist; pz = hd; nx = 0; nz = 1;
+                } else {
+                    dist -= (2 * w + d); px = -hw; pz = hd - dist; nx = -1; nz = 0;
+                }
+                pPos[i * 3] = px;
+                pPos[i * 3 + 1] = 0;
+                pPos[i * 3 + 2] = pz;
+                pCol[i * 3] = c.r; pCol[i * 3 + 1] = c.g; pCol[i * 3 + 2] = c.b;
+                const speed = 1.5 + Math.random() * 2.5;
+                const spread = (Math.random() - 0.5) * 0.5;
+                pVel.push({
+                    vx: nx * speed + spread,
+                    vy: 0.3 + Math.random() * 0.8,
+                    vz: nz * speed + spread
+                });
+            }
+            const pGeo = new THREE.BufferGeometry();
+            pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+            pGeo.setAttribute('color', new THREE.BufferAttribute(pCol, 3));
+            const pMat = new THREE.PointsMaterial({
+                size: 0.08, transparent: true, opacity: 0.9,
+                vertexColors: true, depthWrite: false
+            });
+            const particles = new THREE.Points(pGeo, pMat);
+            group.add(particles);
+
+            ripples.push({ group, shadows, particles, pVel, startTime: performance.now() });
+        }
+
+        function updateRipples() {
+            for (let i = ripples.length - 1; i >= 0; i--) {
+                const r = ripples[i];
+                const elapsed = (performance.now() - r.startTime) / 1000;
+                if (elapsed > RIPPLE_DURATION) {
+                    scene.remove(r.group);
+                    for (const s of r.shadows) { s.mesh.geometry.dispose(); s.mesh.material.dispose(); }
+                    r.particles.geometry.dispose();
+                    r.particles.material.dispose();
+                    ripples.splice(i, 1);
+                    continue;
+                }
+                const t = elapsed / RIPPLE_DURATION;
+                // 虚影面片扩散+淡出
+                for (const s of r.shadows) {
+                    const rt = Math.max(0, (elapsed - s.delay) / (RIPPLE_DURATION - s.delay));
+                    if (rt > 0) {
+                        const scale = 1.0 + rt * 24.0;
+                        s.mesh.scale.set(scale, scale, 1);
+                        s.mesh.material.opacity = Math.max(0, (0.4 - s.delay * 0.3) * (1 - rt) * (1 - rt));
+                    }
+                }
+                // 粒子飞散
+                const dt = 0.016;
+                const pos = r.particles.geometry.attributes.position.array;
+                for (let j = 0; j < r.pVel.length; j++) {
+                    pos[j * 3] += r.pVel[j].vx * dt;
+                    pos[j * 3 + 1] += r.pVel[j].vy * dt;
+                    r.pVel[j].vy -= 2.0 * dt;
+                    pos[j * 3 + 2] += r.pVel[j].vz * dt;
+                }
+                r.particles.geometry.attributes.position.needsUpdate = true;
+                r.particles.material.opacity = 0.9 * (1 - t);
+                r.particles.material.size = 0.08 + t * 0.04;
+            }
+        }
+
+        function clearRipples() {
+            for (const r of ripples) {
+                scene.remove(r.group);
+                for (const s of r.shadows) { s.mesh.geometry.dispose(); s.mesh.material.dispose(); }
+                r.particles.geometry.dispose();
+                r.particles.material.dispose();
+            }
+            ripples.length = 0;
+        }
+
+        // ===== 方块下陷回弹系统 =====
+        const squashes = [];
+        const SQUASH_DURATION = 0.25;
+
+        function triggerSquash(mesh) {
+            // 避免重复触发
+            for (const s of squashes) if (s.mesh === mesh) return;
+            squashes.push({ mesh, startTime: performance.now(), origScaleY: mesh.scale.y });
+        }
+
+        function updateSquashes() {
+            for (let i = squashes.length - 1; i >= 0; i--) {
+                const s = squashes[i];
+                const elapsed = (performance.now() - s.startTime) / 1000;
+                if (elapsed > SQUASH_DURATION) {
+                    s.mesh.scale.y = s.origScaleY;
+                    squashes.splice(i, 1);
+                    continue;
+                }
+                // 快速下陷 + 弹性回弹（ease-out bounce曲线）
+                const t = elapsed / SQUASH_DURATION;
+                const bounce = t < 0.3
+                    ? 1 - 0.5 * (t / 0.3)                        // 前30%：压到0.5
+                    : 0.5 + 0.5 * Math.sin((t - 0.3) / 0.7 * Math.PI); // 后70%：弹回1.0
+                s.mesh.scale.y = s.origScaleY * bounce;
+            }
+        }
+
+        function clearSquashes() {
+            for (const s of squashes) s.mesh.scale.y = s.origScaleY;
+            squashes.length = 0;
+        }
+
+        // ===== 初始化轨道 =====
+        // 动态查找球到达targetZ前，最后一个type1的颜色
+        function getExpectedColor(targetZ) {
+            let best = null, bestZ = Infinity;
+            for (const g of trackGroups) {
+                if (!g) continue;
+                if (g.type === 1 && g.centerZ > targetZ && g.centerZ < bestZ) {
+                    bestZ = g.centerZ;
+                    best = g;
+                }
+            }
+            return best ? best.mainColor : currentBallColor;
+        }
+
+        function initTracks() {
+            trackGroups.length = 0;
+            const first = buildGroup(0, 1, 0);
+            trackGroups.push(first);
+            currentBallColor = first.mainColor;
+
+            let pg = first;
+            for (let i = 1; i < GROUP_COUNT; i++) {
+                const type = randomType();
+                const halfLen = TRACK_TYPES[type].halfLen;
+                const centerZ = pg.centerZ - pg.halfLen - GROUP_GAP - halfLen;
+                const ec = type === 1 ? 0 : getExpectedColor(centerZ);
+                const group = buildGroup(centerZ, type, ec);
+                trackGroups.push(group);
+                pg = group;
+            }
+
+            backEdgeZ = Infinity;
+            for (const g of trackGroups) {
+                const back = g.centerZ - g.halfLen;
+                if (back < backEdgeZ) backEdgeZ = back;
+            }
+        }
+
+        // ===== 碰撞检测：查找球X位置下最近的方块 =====
+        function getBlockUnderBall(group) {
+            if (group.type === 1) {
+                return { onBlock: true, isSafe: true };
+            }
+            // type 2/3：找球X位置最近的方块
+            let closestBlock = null, closestDist = Infinity;
+            for (const block of group.blocks) {
+                const dist = Math.abs(ballX - block.x);
+                if (dist < closestDist) {
+                    closestDist = dist;
+                    closestBlock = block;
+                }
+            }
+            if (closestBlock && closestDist <= closestBlock.halfW + BALL_RADIUS * 0.5) {
+                return { onBlock: true, isSafe: closestBlock.isSafe };
+            }
+            return { onBlock: false, isSafe: false };
+        }
+
+        // ===== 碰撞处理 =====
+        function handleCollision() {
+            let currentGroup = null, minDist = Infinity;
+            for (const g of trackGroups) {
+                const d = Math.abs(g.centerZ);
+                if (d < minDist) { minDist = d; currentGroup = g; }
+            }
+
+            let nextGroup = null, bestZ = -Infinity;
+            for (const g of trackGroups) {
+                if (g !== currentGroup && g.centerZ < currentGroup.centerZ - 0.3) {
+                    if (g.centerZ > bestZ) { bestZ = g.centerZ; nextGroup = g; }
+                }
+            }
+
+            if (nextGroup) {
+                const drift = currentGroup.centerZ;
+                if (Math.abs(drift) > 0.001) {
+                    for (const g of trackGroups) {
+                        g.centerZ -= drift;
+                        for (const m of g.meshes) m.position.z -= drift;
+                    }
+                    backEdgeZ -= drift;
+                    // 黑洞跟随移动
+                    if (blackHole) {
+                        blackHoleZ -= drift;
+                        blackHole.position.z = blackHoleZ;
+                    }
+                }
+                const distance = 0 - nextGroup.centerZ;
+                scrollSpeed = distance / BOUNCE_PERIOD;
+            } else {
+                scrollSpeed = 0;
+            }
+
+            // 只有type1（长直轨道）才让球变色，type2/3保持球颜色
+            if (currentGroup && currentGroup.type === 1) {
+                currentBallColor = currentGroup.mainColor;
+                sphere.material.color.setHex(currentBallColor);
+                sphere.material.emissive.setHex(currentBallColor);
+            }
+
+            ballVY = Math.sqrt(2 * GRAVITY * BOUNCE_HEIGHT);
+
+            // 连击鼓励
+            showCombo();
+
+            // 碰撞计数
+            collisionCount++;
+            // 累计距离
+            if (scrollSpeed > 0) {
+                totalDistance += scrollSpeed * BOUNCE_PERIOD;
+            }
+            if (!blackHoleSpawned && collisionCount >= WIN_COLLISIONS) {
+                // 根据关卡难度决定黑洞距离：碰撞数越少，黑洞越近
+                const groupsAhead = WIN_COLLISIONS <= 1 ? 2 : WIN_COLLISIONS <= 10 ? 3 : 4;
+                let sorted = [...trackGroups]
+                    .filter(g => g.centerZ < -0.5)
+                    .sort((a, b) => b.centerZ - a.centerZ);
+                let spawnZ = -10;
+                if (sorted.length >= groupsAhead) {
+                    spawnZ = sorted[groupsAhead - 1].centerZ - 1.5;
+                } else if (sorted.length > 0) {
+                    spawnZ = sorted[sorted.length - 1].centerZ - 1.5;
+                }
+                createBlackHole(spawnZ);
+            }
+
+            // 方块下陷 + 涟漪效果
+            if (currentGroup) {
+                let hitBlock = null;
+                for (const block of currentGroup.blocks) {
+                    if (block.mesh && Math.abs(ballX - block.x) <= block.halfW + BALL_RADIUS * 0.5) {
+                        hitBlock = block;
+                        break;
+                    }
+                }
+                if (hitBlock && hitBlock.mesh) {
+                    triggerSquash(hitBlock.mesh);
+                    const params = hitBlock.mesh.geometry.parameters;
+                    createRipple(hitBlock.x, 0, currentBallColor, params.width, params.depth);
+                }
+            }
+        }
+
+        // ===== 连击系统 =====
+        let comboCount = 0;
+        let comboVisible = false;
+        const comboEl = document.getElementById('combo');
+        const comboTextEl = document.getElementById('comboText');
+        const comboCountEl = document.getElementById('comboCount');
+
+        function comboColorToHex(color) {
+            return '#' + color.toString(16).padStart(6, '0');
+        }
+
+        function showCombo() {
+            comboCount++;
+            const text = Math.random() < 0.7 ? 'PERFECT' : 'GREAT';
+            const glowColor = comboColorToHex(currentBallColor);
+            const shadow = `0 0 20px ${glowColor}, 0 0 40px ${glowColor}, 0 0 80px ${glowColor}`;
+
+            if (!comboVisible) {
+                comboTextEl.textContent = text;
+                comboVisible = true;
+                comboEl.classList.add('show');
+            }
+            comboCountEl.textContent = 'x' + comboCount;
+            comboTextEl.style.textShadow = shadow;
+            comboCountEl.style.textShadow = shadow;
+        }
+
+        function hideCombo() {
+            comboCount = 0;
+            comboVisible = false;
+            comboEl.classList.remove('show');
+        }
+
+        // ===== 死亡触发 =====
+        function triggerDeath() {
+            if (gameState !== 'playing') return;
+            gameState = 'dying';
+            sphere.visible = false;
+            orbitGroup.visible = false;
+            hideCombo();
+            createExplosion(ballX, ballY, currentBallColor);
+            dyingTimer = performance.now();
+            scrollSpeed *= 0.3; // 轨道减速
+        }
+
+        function showGameOver() {
+            gameState = 'gameover';
+            document.getElementById('gameOver').classList.add('show');
+            document.body.style.cursor = 'auto';
+        }
+
+        // ===== 重新开始 =====
+        function restartGame() {
+            // 清除所有轨道
+            for (const g of trackGroups) clearGroup(g);
+            trackGroups.length = 0;
+            clearExplosion();
+            clearRipples();
+            clearSquashes();
+            clearBlackHole();
+            hideCombo();
+
+            // 重置状态
+            ballX = 0;
+            ballY = COLLISION_Y;
+            ballVY = Math.sqrt(2 * GRAVITY * BOUNCE_HEIGHT);
+            scrollSpeed = 0;
+            gameState = 'playing';
+            collisionCount = 0;
+            totalDistance = 0;
+            winningTimer = 0;
+            bhSuctionForce = 0;
+            if (currentLevel) {
+                currentTypes = currentLevel.types;
+                WIN_COLLISIONS = currentLevel.winCollisions;
+            }
+            currentDistEl.textContent = '0';
+            targetDistEl.textContent = '目标: ???m';
+            targetDistEl.style.color = 'rgba(160,180,255,0.5)';
+            targetDistEl.style.textShadow = '0 0 8px rgba(100,140,255,0.3)';
+
+            sphere.visible = true;
+            orbitGroup.visible = true;
+            sphere.material.color.setHex(0x3a7ec5);
+            sphere.material.emissive.setHex(0x1a3050);
+
+            document.getElementById('gameOver').classList.remove('show');
+            document.getElementById('winScreen').classList.remove('show');
+            document.body.style.cursor = 'none';
+
+            // 重建轨道
+            initTracks();
+            handleCollision();
+        }
+
+        document.getElementById('restartBtn').addEventListener('click', restartGame);
+        document.getElementById('winMenuBtn').addEventListener('click', () => showLevelSelect());
+        document.getElementById('overMenuBtn').addEventListener('click', () => showLevelSelect());
+
+        // ===== 鼠标控制 =====
+        document.addEventListener('mousemove', (e) => {
+            if (gameState !== 'playing') return;
+            ballX += e.movementX * MOUSE_SENSITIVITY;
+            ballX = Math.max(-BALL_X_LIMIT, Math.min(BALL_X_LIMIT, ballX));
+        });
+
+        // ===== 初始化 =====
+        // 轨道在 startLevel → restartGame 中初始化
+        buildLevelGrid();
+        showLevelSelect();
+
+        // ===== 动画循环 =====
+        let lastTime = performance.now();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const now = performance.now();
+            const dt = Math.min((now - lastTime) / 1000, 0.033);
+            lastTime = now;
+
+            // 菜单状态：只渲染背景
+            if (gameState === 'menu') {
+                stars.rotation.y += 0.0001;
+                renderer.render(scene, camera);
+                return;
+            }
+
+            // 死亡动画阶段
+            if (gameState === 'dying') {
+                updateExplosion();
+                // 轨道继续慢慢动
+                for (const g of trackGroups) {
+                    g.centerZ += scrollSpeed * dt;
+                    for (const m of g.meshes) m.position.z += scrollSpeed * dt;
+                }
+                if (now - dyingTimer > DYING_DURATION * 1000) {
+                    showGameOver();
+                }
+                updateRipples();
+                updateSquashes();
+                updateBlackHole(dt);
+                renderer.render(scene, camera);
+            }
+
+            if (gameState === 'gameover') {
+                renderer.render(scene, camera);
+                return;
+            }
+
+            // winning状态：吸入动画
+            if (gameState === 'winning') {
+                updateBlackHole(dt);
+                renderer.render(scene, camera);
+                return;
+            }
+
+            // === playing 状态 ===
+            // 更新重力加速计时
+            ballVY -= GRAVITY * dt;
+            ballY += ballVY * dt;
+
+            if (ballY <= COLLISION_Y && ballVY <= 0) {
+                ballY = COLLISION_Y;
+
+                // 找当前组（centerZ 最接近 0）
+                let currentGroup = null, minDist2 = Infinity;
+                for (const g of trackGroups) {
+                    const d = Math.abs(g.centerZ);
+                    if (d < minDist2) { minDist2 = d; currentGroup = g; }
+                }
+
+                if (currentGroup && currentGroup.type !== 1) {
+                    const result = getBlockUnderBall(currentGroup);
+                    if (!result.onBlock || !result.isSafe) {
+                        triggerDeath();
+                        renderer.render(scene, camera);
+                        return;
+                    }
+                }
+
+                handleCollision();
+            }
+
+            // 掉落太空检测
+            if (ballY < COLLISION_Y - 2) {
+                triggerDeath();
+                renderer.render(scene, camera);
+                return;
+            }
+
+            // 移动轨道
+            for (const g of trackGroups) {
+                g.centerZ += scrollSpeed * dt;
+                for (const m of g.meshes) m.position.z += scrollSpeed * dt;
+            }
+            backEdgeZ += scrollSpeed * dt;
+            // 移动黑洞跟随轨道
+            if (blackHole) {
+                blackHoleZ += scrollSpeed * dt;
+                blackHole.position.z = blackHoleZ;
+            }
+
+            // 移除已经滑到玩家后方的轨道组
+            for (let i = trackGroups.length - 1; i >= 0; i--) {
+                const g = trackGroups[i];
+                if (g && g.centerZ > VISIBLE_RANGE + 2) {
+                    clearGroup(g);
+                    trackGroups.splice(i, 1);
+                }
+            }
+
+            // 回收（黑洞后面不再生成新轨道）
+            if (!blackHoleSpawned) {
+                let recycled = false;
+                for (let i = 0; i < trackGroups.length && !recycled; i++) {
+                    const g = trackGroups[i];
+                    if (g.centerZ - g.halfLen > VISIBLE_RANGE) {
+                        const newBackEdge = backEdgeZ - GROUP_GAP;
+                        const newType = randomType();
+                        const newHalfLen = TRACK_TYPES[newType].halfLen;
+                        const newCenterZ = newBackEdge + newHalfLen;
+                        clearGroup(g);
+                        trackGroups[i] = null;
+                        const ec = newType === 1 ? 0 : getExpectedColor(newCenterZ);
+                        trackGroups[i] = buildGroup(newCenterZ, newType, ec);
+                        backEdgeZ = newBackEdge;
+                        recycled = true;
+                    }
+                }
+            }
+
+            // 渲染
+            sphere.position.set(ballX, ballY, 0);
+            const heightRatio = Math.max(0, (ballY - COLLISION_Y) / BOUNCE_HEIGHT);
+            const squash = 1 + (1 - heightRatio) * 0.12;
+            sphere.scale.set(1 / Math.sqrt(squash), squash, 1 / Math.sqrt(squash));
+            sphere.rotation.z = Math.sin(now * 0.003) * 0.05;
+            orbitGroup.position.copy(sphere.position);
+            dustParticles.rotation.y += 0.002;
+            dustParticles.rotation.x = Math.sin(now * 0.0005) * 0.1;
+            stars.rotation.y += 0.0001;
+
+            updateRipples();
+            updateSquashes();
+            updateBlackHole(dt);
+            // 检查球是否进入黑洞
+            if (checkBlackHoleEntry()) {
+                triggerWin();
+                // 进入黑洞时，目标距离 = 当前距离
+                targetDistEl.textContent = '目标: ' + Math.floor(totalDistance) + 'm';
+                targetDistEl.style.color = 'rgba(68,255,170,0.8)';
+                targetDistEl.style.textShadow = '0 0 12px rgba(68,255,170,0.6)';
+            }
+            // 更新距离HUD
+            currentDistEl.textContent = Math.floor(totalDistance);
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>
